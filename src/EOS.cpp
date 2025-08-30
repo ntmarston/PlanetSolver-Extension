@@ -168,7 +168,7 @@ void EOS::setThermal(int newThermNum)
       string debFilename = "debye.txt";
       std::ifstream datfile(debFilename.c_str());
       if (!datfile)
-	 std::cout << datfile << std::endl;
+	 std::cout << "\ndebye file is False...\n" << std::endl;
 		
       char* store = new char[100];
       datfile.getline(store, 100);

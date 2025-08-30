@@ -6,10 +6,10 @@
  * Wesley Verne
  */
 
-#include "stdafx.h"
-#include "files.h"
+#include "stdafx.h" //collection of standard libraries and header for windows compilers?
+#include "files.h" //Include list of project files
 
-using namespace cons;
+using namespace cons; // Imports constants from constants.cpp (I think)
 using namespace std;
 
 const double ITERATE_PRECISION = 1.e-4; // Required precision for mass.
@@ -18,11 +18,14 @@ const double DIFF_PRECISION = 1.e-3;    // Sets the delta used to find dM/dP.
 const double INITIAL_P = 1.e10;         // Initial guess for central pressure.
 const double STEP_SIZE = 0.1;           // Maximum step size for central pressure.
 const double ESTEP_SIZE = 0.01;        // Maximum step size for entropy.
+
 Planet createPlanet(double pCentral, double minP, double mGuess, EOS* eosc);
+
 double dMdP(double pCentral, double minP, double mGuess, EOS* eosc);
+
 void printHelp(const char* progName);
 
-bool evolve = false;
+bool evolve = false; //Evolution is off by default
 double numH = 100.; // integration step size in meters
 
 typedef pair<EOS*, double> EOSBoundaryFrac;
@@ -30,6 +33,7 @@ vector<EOSBoundaryFrac> boundaries;
 
 int main(int argc, const char* argv[])
 {
+
   EOS* eosc = new EOS();
   eosc->setNum(1);
   EOS* eosa = new EOS();
@@ -70,12 +74,14 @@ int main(int argc, const char* argv[])
 
   double top = 0.;
 
-  // Read in settings.
+  // Read in arguments and initialize settings
 
   string wrFile = "Evolve.dat";
   
   std::ofstream evolOut(wrFile.c_str());
   
+  //Iterate through input and handle arguments
+
   if (argc == 1){
     printHelp(argv[0]);
     return 0;
@@ -83,19 +89,23 @@ int main(int argc, const char* argv[])
     
   int i=1;
   while(i<argc){
-    
+    //Reminder: strcmp returns false (0) if both strings are equal
+
+    //help argument
     if (!strcmp("-h", argv[i]) || !strcmp("-help", argv[i])){
       printHelp(argv[0]);
       return 0;
     }
     
+    //secret argument to change evolution file name
     if(!strcmp("-wr", argv[i]) || !strcmp("-writeto", argv[i])){
       wrFile = argv[i+1];
-      i+=2;
+      i+=2; //add two because the parameter of this argument is also stored in argv
       evolOut.close();
       evolOut.open(wrFile);
     }
 
+    //central core argument
     else if(!strcmp("-c", argv[i]) || !strcmp("-central", argv[i])){
       eosc->setMixTab(argv[i+1]);
       top = atof(argv[i+2]);
@@ -107,6 +117,7 @@ int main(int argc, const char* argv[])
       i+=3;
     }
 
+    //core type selection
     else if(!strcmp("-cn", argv[i]) || !strcmp("-centralnum", argv[i])){
       eosc->setNum(atoi(argv[i+1]));
       top = atof(argv[i+2]);
@@ -119,6 +130,7 @@ int main(int argc, const char* argv[])
       i+=3;
     }
 
+    //specify eos option
     else if(!strcmp("-e", argv[i]) || !strcmp("-eos", argv[i])){
       EOS* eosn = new EOS();
       eosn->setMixTab(argv[i+1]);
@@ -135,6 +147,7 @@ int main(int argc, const char* argv[])
       i+=3;
     }
 
+    //specify subsequent eos option
     else if(!strcmp("-en", argv[i]) || !strcmp("-eosnum", argv[i])){
       EOS* eosn = new EOS();
       eosn->setNum(atoi(argv[i+1]));
@@ -151,8 +164,9 @@ int main(int argc, const char* argv[])
       i+=3;
     }
 
+    //Configure atmosphere
     else if(!strcmp("-a", argv[i]) || !strcmp("-atmosphere", argv[i])){
-      entropy = atof(argv[i+1]);
+      entropy = atof(argv[i+1]); //converts arg to float and feeds to entropy, because floats don't get caught by the integer argc array
       metals = atof(argv[i+2]);
       
       if(entropy<4.0 || entropy>17.0){
@@ -176,18 +190,21 @@ int main(int argc, const char* argv[])
       i+=4;
     }
 
+    //set minimum pressure option
     else if(!strcmp("-p", argv[i]) || !strcmp("-pressure", argv[i])){
       // Note: EOS tables are listed in Mbar, integration uses Pa
       minP = atof(argv[i+1]) * 1.e5;
       i+=2;
     }
     
+    //Set planet mass option
     else if(!strcmp("-m", argv[i]) || !strcmp("-mass", argv[i])){
       mass = atof(argv[i+1])*M_EARTH;
       evolOut << "mass " << mass/M_EARTH << "\n";
       i+=2;
     }
 
+    //Configure stellar parameters option (for evolution)
     else if(!strcmp("-s", argv[i]) || !strcmp("-star", argv[i])){
       mstar *= atof(argv[i+1]);
       lstar *= atof(argv[i+2]);
@@ -197,17 +214,20 @@ int main(int argc, const char* argv[])
       i+=5;
     }
 
+    //Set integration size and interval option
     else if(!strcmp("-i", argv[i]) || !strcmp("-integration", argv[i])){
-      numH = atof(argv[i+1]);
-      interval = atoi(argv[i+2]);
+      numH = atof(argv[i+1]); //set the global variable numH, which is the integration step size (in meters)
+      interval = atoi(argv[i+2]); //set the "resolution" of the output file
       i+=3;
     }
 
+    //Option to change name of output structure file
     else if(!strcmp("-struct", argv[i])){
       oFilename = argv[i+1];
       i+=2;
     }
 
+    //Whether or not to run evolution model
     else if(!strcmp("-evolve", argv[i])){
       evolve = true;
       if(atoi(argv[i+1])==0) massloss = false;
@@ -215,6 +235,12 @@ int main(int argc, const char* argv[])
       i+=2;
     }
     
+    //TODO ADD ENERGY INJECTION HERE
+    else if(!strcmp("-evolve", argv[i])){
+      printf("Not yet implemented\n")
+    }
+
+
     else{
       printf("Unrecognized argument: %s\n", argv[i]);
       i++;
@@ -228,12 +254,14 @@ int main(int argc, const char* argv[])
   double mGuess = M_EARTH;
   i=0;
 
+  //create planet with initial guess for central pressure
   Planet pOut = createPlanet(pCentral, minP, mass, eosc);
 
-  double m = pOut.getMTotal();
-  double rad = pOut.getR();
+  double m = pOut.getMTotal(); 
+  double rad = pOut.getR(); 
   
-  while((abs(m-mass) / mass) > ITERATE_PRECISION){
+  //Fit central pressure to specified mass
+  while((abs(m-mass) / mass) > ITERATE_PRECISION){ 
     double pCentralLast = pCentral;
     double dmp = dMdP(pCentral, minP, mass, eosc);
     double pstep = (m-mass) / dmp;
@@ -248,41 +276,48 @@ int main(int argc, const char* argv[])
     if(pCentral<1.1e6) pCentral = 1.1e6;
     if(pCentral>1.e14) pCentral = 1.e14;
 
-    Planet pTest = createPlanet(pCentral, minP, mass, eosc);
-    m = pTest.getMTotal();
-    rad = pTest.getR();
+    Planet pTest = createPlanet(pCentral, minP, mass, eosc); //create planet model with next step down in pressure (move outward from center)
+    m = pTest.getMTotal(); //get next step in mass
+    rad = pTest.getR(); //get next in rad
     
-    if(i>ITERATE_CUTOFF){
+    if(i>ITERATE_CUTOFF){ //Nonstandard exit conditions
       evolOut << "Iteration limit exceeded for s=" << entropy << ".\n";
       entropy -=0.1;
       i = -1;
       if(entropy<4.0){
-	evolOut << "Initial model failed: low entropy.\n";
-	printf("Initial model failed: low entropy."); // Command line alert to remove confusion.
-	return 0;
+        evolOut << "Initial model failed: low entropy.\n";
+        printf("Initial model failed: low entropy."); // Command line alert to remove confusion.
+        return 0;
       }
     }
+
     i++;
   }
   
+  //Create planet model with the central pressure fitted above
   Planet pFinal = createPlanet(pCentral, minP, mass, eosc);
-  // End of structural model.
+  /* End of structural model. */
   
   // Output and finish if evolution is not called for.
   if(!evolve) pFinal.printRecord(oFilename, interval, entropy, metals);
   
-  // Evolutionary model.
+
+  /*
+  
+  Evolutionary model.
+  
+  */
   if(evolve){
     
     Planet pStep = createPlanet(pCentral, minP, mass, eosc);
 
     double RTotal = pStep.getR();
-    double realmass = pStep.getMTotal();
-    double envmass = realmass*efrac;
-    double miron = realmass*cfrac;
-    double mrock = realmass*sifrac;
-    double mcore = realmass - envmass;
-    double efrac0 = envmass/realmass;
+    double realmass = pStep.getMTotal(); //total mass Mp
+    double envmass = realmass*efrac; //Envelope mass = AMF * Mp
+    double miron = realmass*cfrac; //Iron mass in core as fraction of Mp
+    double mrock = realmass*sifrac; //Silicate mass in core as fraction of Mp
+    double mcore = realmass - envmass; //Total mass of core
+    double efrac0 = envmass/realmass; //Initial (t=0) AMF
     double teff = 0.;
     
     // Evolutionary sequence up to the age of the universe.
@@ -292,11 +327,14 @@ int main(int argc, const char* argv[])
     
     while(time >= 0 && time <= 14000 && entropy >= 4.0){
       
+      //findVals sets iceCV, tCore, pCore, Tdm, tSurf
       pStep.findVals(interval,entropy,metals,mcore,mrock); 
-
+      
+      /* For radiative atmosphere which is not implemented*/
       double gravity = 980. * realmass/M_EARTH / (RTotal/R_EARTH) / (RTotal/R_EARTH);
       //double thickness = getThickness(gravity,teff,bc);
       double thickness = 0.; // temporary pending implementing the radiative atmosphere
+      
 
       double mdot = 0.;
 
@@ -304,65 +342,67 @@ int main(int argc, const char* argv[])
       
       if(massloss){
 
-	// Treating Jeans escape as negligible for now
-	double mdotjeans = 0.;
+        // Treating Jeans escape as negligible for now
+        double mdotjeans = 0.;
+        
+        // Stellar wind ablation
+        double mdotstar = 1.27e12*(100./(100.+time))*(100./(100.+time));
+        double mdotwind = mdotstar*(RTotal+thickness)*(RTotal+thickness)/4./dist/dist * 300./11.;
+
+        // Impact erosion term
+        double mdotimp = 0.;
+
+        // Photoevaporation
+        double tref = time;
+        if(time<100) tref = 100.;
+              double dissoc = 1.0; // efficiency of dissociation as a multiple of ionization, may be as high as 2.5 according to some estimates
+
+        double fxuv = 0.;
 	
-	// Stellar wind ablation
-	double mdotstar = 1.27e12*(100./(100.+time))*(100./(100.+time));
-	double mdotwind = mdotstar*(RTotal+thickness)*(RTotal+thickness)/4./dist/dist * 300./11.;
+        switch(startype){
+        case 1:
+          // solar flux estimates broken down by bands: 0.1-2.0, 2-10, 10-36, 36-92, and 92-111 nm.
+          // broadband baseline is 29.7*tref^-1.23
+          fxuv = 2.40*pow(tref/1000,-1.92) + 4.45*pow(tref/1000,-1.27) + 13.5*pow(tref/1000,-1.20) + 4.56*pow(tref/1000,-1.00) + dissoc * 1.85*pow(tref/1000,-0.85);
+          fxuv /=  (dist/AU)*(dist/AU) * 1000.; // Default XUV flux model in W/m^2
+          break;
+              case 2:
+          // K-dwarfs: best practice (per Loyd et al. 2021) is Loyd et al. (2016) (MUSCLES III)
+          // MUSCLES benchmark: HD 85512, SpT K6, parameters from Pepe et al. (2011)
+          fxuv = 34.69 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
+          break;
+              case 3:
+          // Early M-dwarfs, MUSCLES benchmark: GJ 832, SpT M2
+          fxuv = 20.95 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
+          break;
+              case 4:
+          // Mid M-dwarfs, MUSCLES benchmark: Prox Cen, SpT M5.5 (chosen for the best age estimate)
+          fxuv = 7.966 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
+          break;
+              case 5:
+          // Late M-dwarfs: TRAPPIST-1, SpT M8 (Peacock et al., 2019, Model 1A)
+          fxuv = 4.410 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
+          break;
+        }
+        double rhill = dist*AU*pow(mass/(3.*mstar),1./3.); // Hill radius in m
+        double xi = rhill/(RTotal+thickness);
 
-	// Impact erosion term
-	double mdotimp = 0.;
+        if(xi<1){
+          evolOut << "Roche lobe overflow encountered.\n";
+        }
 
-	// Photoevaporation
-	double tref = time;
-	if(time<100) tref = 100.;
-        double dissoc = 1.0; // efficiency of dissociation as a multiple of ionization, may be as high as 2.5 according to some estimates
+        double ktide = 1. - 3./2./xi + 1./2./pow(xi,3.);
+        double mdotuv = epsilon * PI * fxuv * pow(RTotal+thickness,3) / G / mass / ktide; // mass loss rate in kg/s
 
-	double fxuv = 0.;
-	
-	switch(startype){
-	case 1:
-	  // solar flux estimates broken down by bands: 0.1-2.0, 2-10, 10-36, 36-92, and 92-111 nm.
-	  // broadband baseline is 29.7*tref^-1.23
-	  fxuv = 2.40*pow(tref/1000,-1.92) + 4.45*pow(tref/1000,-1.27) + 13.5*pow(tref/1000,-1.20) + 4.56*pow(tref/1000,-1.00) + dissoc * 1.85*pow(tref/1000,-0.85);
-	  fxuv /=  (dist/AU)*(dist/AU) * 1000.; // Default XUV flux model in W/m^2
-	  break;
-        case 2:
-	  // K-dwarfs: best practice (per Loyd et al. 2021) is Loyd et al. (2016) (MUSCLES III)
-	  // MUSCLES benchmark: HD 85512, SpT K6, parameters from Pepe et al. (2011)
-	  fxuv = 34.69 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
-	  break;
-        case 3:
-	  // Early M-dwarfs, MUSCLES benchmark: GJ 832, SpT M2
-	  fxuv = 20.95 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
-	  break;
-        case 4:
-	  // Mid M-dwarfs, MUSCLES benchmark: Prox Cen, SpT M5.5 (chosen for the best age estimate)
-	  fxuv = 7.966 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
-	  break;
-        case 5:
-	  // Late M-dwarfs: TRAPPIST-1, SpT M8 (Peacock et al., 2019, Model 1A)
-	  fxuv = 4.410 * (dist/AU)*(dist/AU) * pow(tref/1000,-1.3);
-	  break;
-	}
-	double rhill = dist*AU*pow(mass/(3.*mstar),1./3.); // Hill radius in m
-	double xi = rhill/(RTotal+thickness);
+        mdot = mdotjeans + mdotwind + mdotimp + mdotuv;
+        //end mass loss section
 
-	if(xi<1){
-	  evolOut << "Roche lobe overflow encountered.\n";
-	}
-
-	double ktide = 1. - 3./2./xi + 1./2./pow(xi,3.);
-	double mdotuv = epsilon * PI * fxuv * pow(RTotal+thickness,3) / G / mass / ktide; // mass loss rate in kg/s
-
-	mdot = mdotjeans + mdotwind + mdotimp + mdotuv;
       }
       
       // Compute energy balance.
-      //double teff = getTeff(gravity,entropy,bc); // used for the radiative atmosphere
-      double tSurf = pStep.getTsurf();
-      double tCore = pStep.getTcore();
+      // double teff = getTeff(gravity,entropy,bc); // used for the radiative atmosphere
+      double tSurf = pStep.getTsurf(); //Temp at edge of planet?
+      double tCore = pStep.getTcore(); //Temp in core region, possibly center of core but unclear
       
       double cv = 0.1*(1.2e3*(mrock-miron) + 8.e3*miron + pStep.getIceCV() ) / mass; // heat capacity in MKS, but need sources
       double Tdm = pStep.getTdm();
@@ -380,6 +420,7 @@ int main(int argc, const char* argv[])
 
       // in the absence of boundary conditions, need irradiation
       
+      //TODO add injection term as a positive contribution here
       double dedt = -leff + leradio + lcradio + lirrad;
       
       // Set a lower entropy and compute how long the planet takes to reach it.
@@ -392,7 +433,7 @@ int main(int argc, const char* argv[])
       double deltaECore = cv * (tCoreNew-tCore) * (mass-envmass);
       // cooling by core with given change in entropy = Lcore * timestep (computed below)
       
-      double dsdt = dedt/Tdm*1.21e-4;
+      double dsdt = dedt/Tdm*1.21e-4; //not used anywhere else
       double timestep = (-ESTEP_SIZE * Tdm + deltaECore) / dedt / MYR;
       
       double deltaM = 0.;
@@ -404,44 +445,44 @@ int main(int argc, const char* argv[])
       }
 
       if(massloss){
-	deltaM = mdot*timestep*MYR;
-	if(abs(deltaM/envmass)>0.01){
-	  timestep /= abs(deltaM/envmass/0.01);
-	  scale /= abs(deltaM/envmass/0.01);
-	  deltaM = envmass*0.01;
-	}
-	if(abs(deltaM/mass)<0.0001 && scale<1.0){
-	  timestep /= abs(deltaM/mass/0.0001);
-	  scale /= abs(deltaM/mass/0.0001);
-	  deltaM = mass*0.0001;
-	}
+        deltaM = mdot*timestep*MYR;
+        if(abs(deltaM/envmass)>0.01){
+          timestep /= abs(deltaM/envmass/0.01);
+          scale /= abs(deltaM/envmass/0.01);
+          deltaM = envmass*0.01;
+        }
+        if(abs(deltaM/mass)<0.0001 && scale<1.0){
+          timestep /= abs(deltaM/mass/0.0001);
+          scale /= abs(deltaM/mass/0.0001);
+          deltaM = mass*0.0001;
+        }
       }
 
       if(timestep>100.){
-	scale = 100./timestep;
-	timestep = 100.;
+        scale = 100./timestep;
+        timestep = 100.;
       }
 
       if((realmass-deltaM) < mcore*1.0001){
-	realmass = mcore;
-	evolOut << "Atmosphere lost.\n";
-	break;
+        realmass = mcore;
+        evolOut << "Atmosphere lost.\n";
+        break;
       }
 
       if(massloss){
-	realmass -= deltaM;
-	mass -= deltaM;
-	envmass -= deltaM;
-	efrac = envmass/realmass;
-	cfrac = mcore/realmass;
-	sifrac = mrock/realmass;
-	for(int i=0; i<boundaries.size()-1; i++){
-	  boundaries[i].second *= (1.-efrac)/(1.-efrac0);
-	}
-	efrac0 = efrac;
+        realmass -= deltaM;
+        mass -= deltaM;
+        envmass -= deltaM;
+        efrac = envmass/realmass;
+        cfrac = mcore/realmass;
+        sifrac = mrock/realmass;
+        for(int i=0; i<boundaries.size()-1; i++){
+          boundaries[i].second *= (1.-efrac)/(1.-efrac0);
+        }
+        efrac0 = efrac;
       }
-      entropy -= ESTEP_SIZE*scale;
-      time += timestep;
+      entropy -= ESTEP_SIZE*scale; //decrement entropy by step size
+      time += timestep; //increase time step based on entropy step
       
       eosa->setEntTab(entropy,metals);
       boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
