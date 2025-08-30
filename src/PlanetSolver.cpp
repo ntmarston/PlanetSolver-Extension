@@ -237,7 +237,7 @@ int main(int argc, const char* argv[])
     
     //TODO ADD ENERGY INJECTION HERE
     else if(!strcmp("-evolve", argv[i])){
-      printf("Not yet implemented\n")
+      printf("Not yet implemented\n");
     }
 
 
