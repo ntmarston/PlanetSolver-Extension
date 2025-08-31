@@ -13,18 +13,22 @@ bool Planet::EOSBoundaryCompare::operator()(const EOSBoundary& p1, const EOSBoun
 }
 
 Planet::Planet(double numH, double pCentral, double setP, EOS* EOSc){
+  //initialize planet and create first "layer" in the structure onion
   h = numH;
   eos = EOSc;
   minP = setP;
-  rVals.push_back(0.0);
+  //These are all vector<double> 
+  //Planet structure is stored in a set of double vectors which have one entry for each step 
+  rVals.push_back(0.0); 
   rhoVals.push_back(eos->getRho(pCentral));
   mVals.push_back(0.0);
   pVals.push_back(pCentral);
   iVals.push_back(0.0);
-  T = 0.0;
+  T = 0.0; //T_eq?
 }
 
 void Planet::findVals(int interval, double entropy, double metals, double mcore, double mrock){
+  //Complicated setter for iceCV, tCore, pCore, Tdm
   int size;
   if(pVals.back()==0.) size = pVals.size()-2;
   else size = pVals.size()-1;
@@ -49,10 +53,11 @@ void Planet::findVals(int interval, double entropy, double metals, double mcore,
   pCore = pVals[j];
 
   Tdm = 0.;
-  for(int i=j; i<size-1; i+=interval){
-    hhe->newton(pVals[i],entropy);
+  for(int i=j; i<size-1; i+=interval){ //integrate T over m from 0 to current size to get Tdm term in energy balance 
+    hhe->newton(pVals[i],entropy); //Newton-Raphson method to compute temperature and density (modifies the T accessed by getT() below)
     Tdm += pow(10,hhe->getT()) * (mVals[i+interval]-mVals[i]);
   }
+
 
   hhe->newton(pVals[size-1],entropy);
   tSurf = pow(10,hhe->getT());
@@ -94,6 +99,7 @@ void Planet::printRecord(string outFile, int interval, double entropy, double me
     }
     else tenv = tcore;
     
+    // Write i rows to output file?
     outputFile.precision(4);
     outputFile << (rVals[i]/R_EARTH) << scientific << "\t";
     outputFile.precision(3);
@@ -109,6 +115,7 @@ void Planet::printRecord(string outFile, int interval, double entropy, double me
   }
   else tenv = tcore;
   
+  //Write last line to output file?
   outputFile.precision(4);
   outputFile << (rVals.back()/R_EARTH) << scientific << "\t";
   outputFile.precision(3);
@@ -128,7 +135,7 @@ void Planet::setT(double newT){
   T = newT;
 }
 
-void Planet::integrate(){
+void Planet::integrate(){ //Planet integration function, but only limits of integral defined here, actual integrand is in step()
   if(pVals.back() <= 0.0){
     throw "Error: negative pressure encountered.\n";
   }
@@ -139,13 +146,13 @@ void Planet::integrate(){
       printf("Planet integration failed.\n");
       break;
     }
-    checkBoundary();
+    checkBoundary(); //check mass boundary
     step();
     i++;
   }
 }
 
-void Planet::step(){
+void Planet::step(){ //helper function for integrate()
   double rho1 = kRho1();
   double m1   =   kM1();
   double rho2 = kRho2(rho1, m1);
@@ -181,6 +188,8 @@ void Planet::checkBoundary(){
   }
 }
 
+
+//Getters 
 double Planet::getT(){
   return T;
 }
