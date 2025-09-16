@@ -453,7 +453,12 @@ int main(int argc, const char* argv[])
         injection_entropy = 0;
         printf("t=%f, simulating imapct...\n", time);
         printf("Adding %f Kb/Baryon to atmosphere...\n", S_inject);
-        eosa->setEntTab(entropy + S_inject,metals);
+        printf("\nEntropy pre-impact: %f", entropy);
+        entropy = entropy + S_inject;
+        printf("\nEntropy post-impact: %f", entropy);
+        printf("\nTcore: %f", tCore);
+        printf("\ncV: %f", cv);
+        eosa->setEntTab(entropy, metals);
         boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
         pStep = createPlanet(pCentral, minP, mass, eosc);
         RTotal = pStep.getR();
