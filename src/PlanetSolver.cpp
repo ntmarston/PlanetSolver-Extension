@@ -63,7 +63,7 @@ int main(int argc, const char* argv[])
   double cu235 = enrichment_prefactor * 6.1e-12;
 
 
-  double injection_entropy = 0; //Energy to inject in MKS
+  double impact_energy = 0; //Energy to inject in MKS
   double injection_time = 0; //Time to inject energy (Myr)
 
   double mstar = 1.9885e30; // used for tidal effects
@@ -253,10 +253,10 @@ int main(int argc, const char* argv[])
       i+=2;
     }
 
-    else if(!strcmp("-inject", argv[i])){
-      injection_entropy = atof(argv[i+1]); 
+    else if(!strcmp("-impact", argv[i])){
+      impact_energy = atof(argv[i+1]); 
       injection_time = atof(argv[i+2]); //Time to inject energy (Myr)
-      printf("\n %f kB/baryon to inject at: ", injection_entropy);
+      printf("\n %f J impact at: ", impact_energy);
       printf("t=%f Myr\n ", injection_time);
 
       i+=3;
@@ -446,18 +446,39 @@ int main(int argc, const char* argv[])
      
       double dedt = -leff + leradio + lcradio + lirrad;
       //Impact entropy change
-       double S_inject = 0;
-      if ((time > injection_time) && (injection_entropy > 0))
+      double S_inject = 0;
+      if ((time > injection_time) && (impact_energy > 0))
       {
-        S_inject = injection_entropy;
-        injection_entropy = 0;
+        double E_imp = impact_energy;
+        impact_energy = 0;
         printf("t=%f, simulating imapct...\n", time);
+        
+
+        double Ecore0 = cv * tCore * (mass - envmass);
+        if(E_imp > (0.5 * Ecore0)){
+          printf("Impact energy too high: to do implement reset method\n");
+        }
+        //printf("Debug:\n");
+        //printf("Albedo %f \n", albedo);
+        
+        double teq = pow((lstar * (1.-albedo) / (16. * (5.67e-8) * PI * pow(dist, 2))), 0.25);
+        
+       
+        S_inject = E_imp/teq;
+        
+        //Assumes number of baryons per molecule is roughly the mass of the atom in daltons
+        double baryon_per_molecule = (1-metals*0.00276)*2.247 + (metals*0.00276)*16.93;
+        double mmw_kg = baryon_per_molecule / 6.022e26;
+        double N_bary = envmass / mmw_kg;
+        
+
+        S_inject = S_inject/N_bary/K_B;
+        printf("Entropy pre-impact: %f\n", entropy);
+        
         printf("Adding %f Kb/Baryon to atmosphere...\n", S_inject);
-        printf("\nEntropy pre-impact: %f", entropy);
         entropy = entropy + S_inject;
-        printf("\nEntropy post-impact: %f", entropy);
-        printf("\nTcore: %f", tCore);
-        printf("\ncV: %f", cv);
+        printf("Entropy post-impact: %f\n", entropy);
+
         eosa->setEntTab(entropy, metals);
         boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
         pStep = createPlanet(pCentral, minP, mass, eosc);
