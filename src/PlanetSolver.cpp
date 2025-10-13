@@ -52,15 +52,19 @@ int main(int argc, const char* argv[])
   bool massloss = false;
   double dist = 1.0 * AU;
   int startype = 0;
-  
-  double ekrad = 1.65e-10; // power per gram total mass in MKS, I think.
-  double ethrad = 1.33e-12;
-  double eu238 = 2.81e-12;
-  double eu235 = 4.70e-12;
-  double ckrad = 1.056e-11;
-  double cthrad = 2.65e-12;
-  double cu238 = 3.74e-12;
-  double cu235 = 6.1e-12;
+  double enrichment_prefactor = 1.0;
+  double ekrad = enrichment_prefactor * 1.65e-10; // power per gram total mass in MKS, I think.
+  double ethrad = enrichment_prefactor * 1.33e-12;
+  double eu238 = enrichment_prefactor * 2.81e-12;
+  double eu235 = enrichment_prefactor * 4.70e-12;
+  double ckrad = enrichment_prefactor * 1.056e-11;
+  double cthrad = enrichment_prefactor * 2.65e-12;
+  double cu238 = enrichment_prefactor * 3.74e-12;
+  double cu235 = enrichment_prefactor * 6.1e-12;
+
+
+  double impact_energy = 0; //Energy to inject in MKS
+  double injection_time = 0; //Time to inject energy (Myr)
 
   double mstar = 1.9885e30; // used for tidal effects
   double lstar = 3.828e26;  // used for thermal heating
@@ -235,9 +239,27 @@ int main(int argc, const char* argv[])
       i+=2;
     }
     
-    //TODO ADD ENERGY INJECTION HERE
-    else if(!strcmp("-evolve", argv[i])){
-      printf("Not yet implemented\n");
+    //ADD ENERGY INJECTION HERE
+    else if(!strcmp("-re", argv[i])){
+      enrichment_prefactor = atof(argv[i+1]);
+      ekrad = enrichment_prefactor * 1.65e-10; // power per gram total mass in MKS, I think.
+      ethrad = enrichment_prefactor * 1.33e-12;
+      eu238 = enrichment_prefactor * 2.81e-12;
+      eu235 = enrichment_prefactor * 4.70e-12;
+      ckrad = enrichment_prefactor * 1.056e-11;
+      cthrad = enrichment_prefactor * 2.65e-12;
+      cu238 = enrichment_prefactor * 3.74e-12;
+      cu235 = enrichment_prefactor * 6.1e-12;
+      i+=2;
+    }
+
+    else if(!strcmp("-impact", argv[i])){
+      impact_energy = atof(argv[i+1]); 
+      injection_time = atof(argv[i+2]); //Time to inject energy (Myr)
+      printf("\n %f J impact at: ", impact_energy);
+      printf("t=%f Myr\n ", injection_time);
+
+      i+=3;
     }
 
 
@@ -421,14 +443,54 @@ int main(int argc, const char* argv[])
       // in the absence of boundary conditions, need irradiation
       
       //TODO add injection term as a positive contribution here
+     
       double dedt = -leff + leradio + lcradio + lirrad;
-      
-      // Set a lower entropy and compute how long the planet takes to reach it.
-      eosa->setEntTab(entropy-ESTEP_SIZE,metals);
-      boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
-      pStep = createPlanet(pCentral, minP, mass, eosc);
-      RTotal = pStep.getR();
-      
+      //Impact entropy change
+      double S_inject = 0;
+      if ((time > injection_time) && (impact_energy > 0))
+      {
+        double E_imp = impact_energy;
+        impact_energy = 0;
+        printf("t=%f, simulating imapct...\n", time);
+        
+
+        double Ecore0 = cv * tCore * (mass - envmass);
+        if(E_imp > (0.5 * Ecore0)){
+          printf("Impact energy too high: to do implement reset method\n");
+        }
+        //printf("Debug:\n");
+        //printf("Albedo %f \n", albedo);
+        
+        double teq = pow((lstar * (1.-albedo) / (16. * (5.67e-8) * PI * pow(dist, 2))), 0.25);
+        
+       
+        S_inject = E_imp/teq;
+        
+        //Assumes number of baryons per molecule is roughly the mass of the atom in daltons
+        double baryon_per_molecule = (1-metals*0.00276)*2.247 + (metals*0.00276)*16.93;
+        double mmw_kg = baryon_per_molecule / 6.022e26;
+        double N_bary = envmass / mmw_kg;
+        
+
+        S_inject = S_inject/N_bary/K_B;
+        printf("Entropy pre-impact: %f\n", entropy);
+        
+        printf("Adding %f Kb/Baryon to atmosphere...\n", S_inject);
+        entropy = entropy + S_inject;
+        printf("Entropy post-impact: %f\n", entropy);
+
+        eosa->setEntTab(entropy, metals);
+        boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
+        pStep = createPlanet(pCentral, minP, mass, eosc);
+        RTotal = pStep.getR();
+      }
+      else {
+        // If no impact to sim, set a lower entropy and compute how long the planet takes to reach it.
+        eosa->setEntTab(entropy-ESTEP_SIZE,metals);
+        boundaries.back() = EOSBoundaryFrac(eosa,1.-efrac);
+        pStep = createPlanet(pCentral, minP, mass, eosc);
+        RTotal = pStep.getR();
+      }
       double tCoreNew = pStep.getTcore();
       double deltaECore = cv * (tCoreNew-tCore) * (mass-envmass);
       // cooling by core with given change in entropy = Lcore * timestep (computed below)
