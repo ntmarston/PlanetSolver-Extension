@@ -33,26 +33,77 @@ class evolution_track:
             evodf.at[i, "Density"] = density.value
 
         evodf = evolution_track.make_age_monotone(evodf)
+        if max(evodf["Age"]) < 4000:
+            print(f"Warning: {efile} is short")
 
         return evodf
 
 
+
     @staticmethod
-    def make_age_monotone(df):
+    def make_age_monotone(df, age_col='Age', epsilon=1e-6):
+        """
+        Adjust age values to ensure strict monotonic increase.
+        
+        Parameters:
+        -----------
+        df : pd.DataFrame
+            DataFrame containing the age column
+        age_col : str
+            Name of the age column (default: 'Age')
+        epsilon : float
+            Small increment to add for repeated values (default: 1e-6)
+        
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with adjusted age column
+        """
+        df = df.copy()
+        
+        
+        ages = df[age_col].values
+        
+        for i in range(1, len(ages)):
+            # If current age is not strictly greater than previous
+            if ages[i] <= ages[i-1]:
+                # Set it to previous age plus small increment
+                ages[i] = ages[i-1] + epsilon
+        
+        df[age_col] = ages
+        return df
+
+
+    
+
+    @staticmethod
+    def __make_age_monotone(df):
         i = 0
         while i < len(df)-1:
             if df.at[i, "Age"] == df.at[i+1, "Age"]:
                 steps_to_unique = 0
                 for j in range(i, len(df)):
-                    if df.at[j, "Age"] == df.at[i, "Age"]:
+                    print(f"i {i} j {j} len {max(list(df.index))} stu {steps_to_unique}")
+
+                    if (df.at[j, "Age"] == df.at[i, "Age"]):
+                        if j >= (len(df)-1):
+                            print("break")
+                            steps_to_unique = (max(list(df.index)) - i)
+                            break
                         steps_to_unique += 1
-                    elif (i+j) == len(df)-1:
-                        break
+                        print("continue")
+                        
+                        continue
+                        
                     else:
                         break
                 
+                
+                print(f"steps_to_unique: {steps_to_unique}")
                 next_unique = df.at[i+steps_to_unique, "Age"]
                 timestep = next_unique - df.at[i, "Age"]# Time entries are not evenly spaced in the first place, and the duplicates are probably a precision issue.
+                if timestep == 0:
+                    timestep = 1e-3
                 Delta_T = min(1, (timestep-1e-4))  # Prefer spacing the points out over 1Myr unless timestep is smaller
                 dt_approx = np.linspace(0, Delta_T, steps_to_unique) # Probably best approximated by logspace but don't need that much accuracy here to break the degeneracy
 
@@ -61,7 +112,8 @@ class evolution_track:
                     df.at[(i+j), "Age"] = adjusted_age
                     
                     #print(f"Adjusted age at {i}+{j} = {adjusted_age:.5f}")
-
+                
+                
                 i = i + steps_to_unique
                 #print(f"GOTO next unique at {df.at[i, "Age"]}")
 
@@ -72,7 +124,7 @@ class evolution_track:
         
         x = df["Age"]
         dx = np.diff(x)
-        assert len(np.where(dx <= 0)[0]) < 1, "Failed to convert to monotonic"
+        assert len(np.where(dx <= 0)[0]) < 1, f"Failed to convert to monotonic, index {np.where(dx <= 0)[0]} dx: {dx[np.where(dx <= 0)[0]]}"
 
         return df
 
@@ -235,11 +287,20 @@ class evolution_track:
             return density, density_err
         
     @staticmethod
+    def get_obs_threshold_points(dfcontrol, impact_time):
+        control_pchip = PchipInterpolator(x=dfcontrol["Age"], y=dfcontrol["Radius"])
+        modelAge = np.linspace(impact_time, 14000, 400)
+        observability_threshold = control_pchip(modelAge) + 0.27 
+        return modelAge, observability_threshold
+    
+    @staticmethod
     def calc_observable_timescale(df, dfcontrol, impact_time):
         obs_pchip = PchipInterpolator(x=df["Age"], y=df["Radius"])
         control_pchip = PchipInterpolator(x=dfcontrol["Age"], y=dfcontrol["Radius"])
         modelAge = np.linspace(impact_time, 14000, 400)
-        observability_threshold = control_pchip(modelAge) + 0.5 #Change based on the instrumental uncertainty that we choose
+        observability_threshold = control_pchip(modelAge) + 0.27 
+        if max(df["Age"]) < 3000:
+            return 0
         if len(np.where(obs_pchip(modelAge) > observability_threshold)[0]) == 0:
             return 0
 
@@ -251,3 +312,34 @@ class evolution_track:
         observable_timescale = modelAge[zero_crossings[1]]-modelAge[zero_crossings[0]]
 
         return observable_timescale
+    
+"""
+class PlanetSolverInterface:
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def build_command(M_p, CMF, entropy, R_p, corecomp={1:0.325, 2:0.625},  impact = [],
+                       wr="Evolve.dat", struct="Planet.dat", s=[1, 1, 1, 0.3]) -> str:
+        impact_time = impact[0]
+        impact_mass_fraction = impact[1]
+        f_env = 1-CMF
+        M_p = 8 * u.Mearth
+        R_p = 10 * u.Rearth
+        M_core = (1-f_env) * M_p
+        R_c = R_p * (M_core/M_p) ** 4  
+        eta = 0.5 # Realistic ish value
+        
+        core_cmd = 
+
+        M_imp = impact_mass_fraction * M_core
+        E_imp = eta * M_imp * (G * M_p)/R_c
+        pcmd = "./PlanetSolver -cn 1 0.0.0162495 -en 2 0.6412495 -a 9.50 30 0.05 -s 1 1 1 0.3 -m 8.0 -evolve 1"
+        magstr = str(impact_mass_fraction).replace(".","-")
+        evolvefilename = f"sim_results/{f_env:3f}-{magstr}.dat"
+        runcmd = (pcmd +
+                   f" -impact {str(E_imp.si.value).replace("+", "")} {int(impact_time)}" +
+                   f"-struct {struct} -wr {wr}")
+
+"""
